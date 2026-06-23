@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - God-Mode Sender</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-200 flex">
+    <div class="w-64 bg-black p-6 flex flex-col space-y-4 min-h-screen">
+        <h1 class="text-2xl font-bold text-white mb-8">God-Mode Sender</h1>
+        <a href="index.html" class="text-blue-400 font-medium">📊 My Stats</a>
+        <a href="mailboxes.html" class="hover:text-blue-400 font-medium">📧 Mailboxes</a>
+        <a href="/api/logout" class="hover:text-red-400 font-medium mt-auto">🚪 Logout</a>
+    </div>
+
+    <div class="flex-1 p-10 overflow-auto">
+        <h2 class="text-3xl font-bold mb-8">My Stats</h2>
+        
+        <div class="grid grid-cols-4 gap-6 mb-10">
+            <div class="bg-gray-800 p-6 rounded-lg shadow-lg"><h3 class="text-gray-400 uppercase text-sm">Total Loaded</h3><p id="totalLoaded" class="text-4xl font-bold text-white mt-2">0</p></div>
+            <div class="bg-gray-800 p-6 rounded-lg shadow-lg"><h3 class="text-gray-400 uppercase text-sm">Sent</h3><p id="totalSent" class="text-4xl font-bold text-green-500 mt-2">0</p></div>
+            <div class="bg-gray-800 p-6 rounded-lg shadow-lg"><h3 class="text-gray-400 uppercase text-sm">Replies</h3><p id="totalReplies" class="text-4xl font-bold text-blue-500 mt-2">0</p></div>
+            <div class="bg-gray-800 p-6 rounded-lg shadow-lg"><h3 class="text-gray-400 uppercase text-sm">Reply Rate</h3><p id="replyRate" class="text-4xl font-bold text-yellow-500 mt-2">0%</p></div>
+        </div>
+
+        <h3 class="text-xl font-bold mb-4">By campaign</h3>
+        <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden mb-10">
+            <table class="w-full text-left">
+                <thead class="bg-gray-700 text-gray-400 uppercase text-sm"><tr><th class="p-4">Campaign</th><th class="p-4">Status</th><th class="p-4">Loaded</th><th class="p-4">Sent</th><th class="p-4">Pending</th><th class="p-4">Failed</th></tr></thead>
+                <tbody id="campaignTable" class="divide-y divide-gray-700"></tbody>
+            </table>
+        </div>
+
+        <h3 class="text-xl font-bold mb-4 mt-10">💬 My Replies</h3>
+        <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden mb-10">
+            <table class="w-full text-left">
+                <thead class="bg-gray-700 text-gray-400 uppercase text-sm"><tr><th class="p-4">From</th><th class="p-4">Subject</th><th class="p-4">Preview</th><th class="p-4">Action</th></tr></thead>
+                <tbody id="repliesTable" class="divide-y divide-gray-700"></tbody>
+            </table>
+        </div>
+
+        <div class="bg-gray-800 p-6 rounded-lg">
+            <h3 class="text-xl font-bold mb-4">Upload Campaign CSV</h3>
+            <p class="text-gray-400 mb-4">CSV must have columns: <b>name, website, email</b></p>
+            <form id="csvForm" enctype="multipart/form-data" class="space-y-4">
+                <input type="text" name="campaign_name" placeholder="Campaign Name" class="w-full p-3 bg-gray-700 rounded" required>
+                <input type="text" name="subject" placeholder='Subject e.g: Question about {website}' class="w-full p-3 bg-gray-700 rounded" required>
+                <textarea name="body" placeholder='Body e.g: {Hi|Hello} {name}, I visited {website}...' class="w-full p-3 bg-gray-700 rounded" required></textarea>
+                <input type="file" name="file" accept=".csv" class="w-full p-3 bg-gray-700 rounded" required>
+                <button type="submit" class="bg-purple-600 hover:bg-purple-700 px-6 py-3 rounded font-bold">Create & Upload</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        async function fetchStats() {
+            const res = await fetch('/api/stats');
+            const data = await res.json();
+            document.getElementById('totalLoaded').innerText = data.total_loaded;
+            document.getElementById('totalSent').innerText = data.sent;
+            document.getElementById('totalReplies').innerText = data.replies;
+            document.getElementById('replyRate').innerText = data.reply_rate + '%';
+
+            const cTable = document.getElementById('campaignTable');
+            cTable.innerHTML = '';
+            data.campaigns.forEach(c => {
+                cTable.innerHTML += `<tr class="hover:bg-gray-700"><td class="p-4">${c.name}</td><td class="p-4"><span class="bg-yellow-500 text-black px-2 py-1 rounded text-xs">${c.status}</span></td><td class="p-4">${c.loaded}</td><td class="p-4 text-green-500">${c.sent}</td><td class="p-4 text-yellow-500">${c.pending}</td><td class="p-4 text-red-500">${c.failed}</td></tr>`;
+            });
+
+            const rTable = document.getElementById('repliesTable');
+            rTable.innerHTML = '';
+            data.recent_replies.forEach(r => {
+                const safeSubject = r.subject.replace(/'/g, "\\'");
+                const safeFrom = r.from_email.replace(/'/g, "\\'");
+                const safeTo = r.to_email.replace(/'/g, "\\'");
+                rTable.innerHTML += `<tr class="hover:bg-gray-700"><td class="p-4 text-blue-400">${r.from_email}</td><td class="p-4">${r.subject}</td><td class="p-4 text-gray-400">${r.body.substring(0, 30)}...</td><td class="p-4 space-x-2"><button onclick="openActionModal('${safeTo}', '${safeFrom}', 'Re: ${safeSubject}', 'reply')" class="bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-xs">Reply</button><button onclick="openActionModal('${safeTo}', '', 'Fwd: ${safeSubject}', 'forward')" class="bg-yellow-600 hover:bg-yellow-700 px-3 py-1 rounded text-xs">Forward</button></td></tr>`;
+            });
+        }
+
+        document.getElementById('csvForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const res = await fetch('/api/campaigns/upload-csv', { method: 'POST', body: formData });
+            const data = await res.json();
+            alert(data.message);
+            fetchStats();
+        });
+
+        function openActionModal(from_email, to_email, subject, type) {
+            let targetEmail = to_email;
+            let message = "";
+            if (type === 'reply') { message = prompt(`Replying to: ${to_email}\nFrom: ${from_email}\n\nEnter your message:`); } 
+            else { targetEmail = prompt(`Forwarding from: ${from_email}\n\nEnter email to forward to:`); if (!targetEmail) return; message = prompt(`Enter message for forwarded email:`); }
+            if (message !== null && message.trim() !== "") {
+                fetch('/api/replies/send-action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from_email: from_email, to_email: targetEmail, subject: subject, body: message }) })
+                .then(res => res.json()).then(data => alert(data.message)).catch(err => alert("Error"));
+            }
+        }
+
+        fetchStats();
+        setInterval(fetchStats, 5000);
+    </script>
+</body>
+</html>

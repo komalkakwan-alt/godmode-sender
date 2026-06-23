@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mailboxes - God-Mode Sender</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-200 flex">
+    <div class="w-64 bg-black p-6 flex flex-col space-y-4 min-h-screen">
+        <h1 class="text-2xl font-bold text-white mb-8">God-Mode Sender</h1>
+        <a href="index.html" class="hover:text-blue-400 font-medium">📊 My Stats</a>
+        <a href="mailboxes.html" class="text-blue-400 font-medium">📧 Mailboxes</a>
+        <a href="/api/logout" class="hover:text-red-400 font-medium mt-auto">🚪 Logout</a>
+    </div>
+
+    <div class="flex-1 p-10">
+        <h2 class="text-3xl font-bold mb-8">Mailboxes</h2>
+
+        <div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-8 max-w-2xl">
+            <h3 class="text-xl font-bold mb-4">Upload Mailboxes CSV</h3>
+            <p class="text-gray-400 mb-4">CSV must have columns: <b>email, app_password</b></p>
+            <form id="mailboxCsvForm" enctype="multipart/form-data" class="space-y-4">
+                <input type="file" name="file" accept=".csv" class="w-full p-3 bg-gray-700 rounded" required>
+                <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded font-bold">Upload & Add</button>
+            </form>
+        </div>
+
+        <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+            <table class="w-full text-left">
+                <thead class="bg-gray-700 text-gray-400 uppercase text-sm"><tr><th class="p-4">Email</th><th class="p-4">Status</th><th class="p-4">Sent Today / Limit</th><th class="p-4">Warmup</th></tr></thead>
+                <tbody id="mailboxTable" class="divide-y divide-gray-700"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        async function fetchMailboxes() {
+            const res = await fetch('/api/mailboxes');
+            const data = await res.json();
+            const table = document.getElementById('mailboxTable');
+            table.innerHTML = '';
+            data.forEach(m => {
+                table.innerHTML += `<tr class="hover:bg-gray-700"><td class="p-4">${m.email}</td><td class="p-4"><span class="bg-green-500 text-black px-2 py-1 rounded text-xs">${m.status}</span></td><td class="p-4">${m.sent_today} / ${m.daily_limit}</td><td class="p-4">${m.warmup_enabled ? '✅ Active' : '❌ Off'}</td></tr>`;
+            });
+        }
+
+        document.getElementById('mailboxCsvForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const res = await fetch('/api/mailboxes/upload-csv', { method: 'POST', body: formData });
+            const data = await res.json();
+            alert(data.message);
+            fetchMailboxes();
+            e.target.reset();
+        });
+
+        fetchMailboxes();
+    </script>
+</body>
+</html>
