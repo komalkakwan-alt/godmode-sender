@@ -12,11 +12,13 @@
 </head>
 <body class="bg-[#0b0f19] text-slate-100 font-sans min-h-screen flex selection:bg-purple-500 selection:text-white overflow-x-hidden">
 
+    <!-- Toast Notification System -->
     <div id="toast" class="fixed top-5 right-5 z-50 flex items-center gap-3 bg-slate-800 border border-slate-700 px-4 py-3 rounded-xl shadow-2xl transform translate-x-full opacity-0 transition-all duration-300 pointer-events-none">
         <div id="toast-icon" class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"></div>
         <p id="toast-msg" class="text-sm font-medium text-white"></p>
     </div>
 
+    <!-- SIDEBAR -->
     <aside class="w-64 bg-[#111827] border-r border-slate-800 flex flex-col justify-between shrink-0">
         <div>
             <div class="h-20 flex items-center px-6 border-b border-slate-800">
@@ -34,14 +36,16 @@
             </nav>
         </div>
         <div class="p-4 border-t border-slate-800">
-            <a href="/api/logout" class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-rose-400 hover:bg-rose-500/10 transition-all">
+            <a href="/api/logout" class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer">
                 <i class="fa-solid fa-right-from-bracket"></i> Logout
             </a>
         </div>
     </aside>
 
+    <!-- MAIN DASHSPACE -->
     <main class="flex-1 p-8 overflow-y-auto max-w-7xl mx-auto space-y-8">
         
+        <!-- TOP HEADER -->
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900/40 p-6 rounded-2xl border border-slate-800 shadow-sm">
             <div>
                 <div class="flex items-center gap-2 mb-1">
@@ -63,6 +67,7 @@
             </div>
         </div>
 
+        <!-- SECTION 1: GLOWING STATS GRID -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             <div class="bg-[#141a29] border border-purple-500/20 rounded-2xl p-6 relative overflow-hidden shadow-xl flex flex-col justify-between">
                 <div class="absolute -right-6 -bottom-6 w-28 h-28 bg-purple-500/10 rounded-full blur-2xl pointer-events-none"></div>
@@ -101,6 +106,7 @@
             </div>
         </div>
 
+        <!-- SECTION 2: CAMPAIGN INGEST FORM -->
         <div class="bg-gradient-to-br from-slate-900/90 to-[#151928] border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
             <div class="absolute top-0 right-0 w-96 h-96 bg-purple-600/5 rounded-full blur-3xl pointer-events-none"></div>
             
@@ -143,6 +149,7 @@
             </form>
         </div>
 
+        <!-- SECTION 3: CAMPAIGNS ROSTER TABLE -->
         <div class="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
             <div class="px-6 py-4 border-b border-slate-800 bg-slate-900/90 flex justify-between items-center">
                 <h3 class="text-xs font-black tracking-wider text-slate-400 uppercase flex items-center gap-2">
@@ -164,11 +171,13 @@
                         </tr>
                     </thead>
                     <tbody id="campaignTable" class="divide-y divide-slate-800/60 text-xs font-mono">
-                        </tbody>
+                        <!-- JS injected -->
+                    </tbody>
                 </table>
             </div>
         </div>
 
+        <!-- SECTION 4: PROSPECT REPLIES CRM INBOX -->
         <div class="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
             <div class="px-6 py-4 border-b border-slate-800 bg-slate-900/90 flex justify-between items-center">
                 <h3 class="text-xs font-black tracking-wider text-slate-400 uppercase flex items-center gap-2 font-sans">
@@ -187,13 +196,15 @@
                         </tr>
                     </thead>
                     <tbody id="repliesTable" class="divide-y divide-slate-800/60 text-xs">
-                        </tbody>
+                        <!-- JS injected -->
+                    </tbody>
                 </table>
             </div>
         </div>
 
     </main>
 
+    <!-- JAVASCRIPT LOGIC -->
     <script>
         function showToast(msg, isError = false) {
             const t = document.getElementById('toast');
@@ -224,32 +235,49 @@
                                          c.status === 'paused' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 
                                          'bg-purple-500/10 text-purple-400 border-purple-500/20';
 
-                        let ctrlBtn = '';
+                        const safeName = (c.name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                        
+                        // Beautiful compact delete button
+                        const deleteBtn = `<button onclick="deleteCampaignBatch(${c.id}, '${safeName}')" title="Permanently Delete Campaign" class="bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-slate-950 border border-rose-500/20 hover:border-rose-500 w-8 h-8 rounded-lg text-xs font-bold transition-all flex items-center justify-center shrink-0 cursor-pointer shadow-sm">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>`;
+
+                        let actionButtons = '';
                         if (c.status === 'draft' || c.status === 'paused') {
-                            ctrlBtn = `<button onclick="toggleCampaignEngine(${c.id}, 'start')" class="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black px-3.5 py-1.5 rounded-lg shadow-lg shadow-emerald-500/20 text-[10px] tracking-widest uppercase transition-all flex items-center gap-1.5 ml-auto cursor-pointer">
-                                <i class="fa-solid fa-play"></i> Dispatch Now
-                            </button>`;
+                            actionButtons = `<div class="flex items-center justify-end gap-2">
+                                <button onclick="toggleCampaignEngine(${c.id}, 'start')" class="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black px-3 py-1.5 rounded-lg shadow-md shadow-emerald-500/20 text-[10px] tracking-widest uppercase transition-all flex items-center gap-1.5 cursor-pointer shrink-0">
+                                    <i class="fa-solid fa-play"></i> Dispatch Now
+                                </button>
+                                ${deleteBtn}
+                            </div>`;
                         } else if (c.status === 'active') {
-                            ctrlBtn = `<button onclick="toggleCampaignEngine(${c.id}, 'pause')" class="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-black px-3.5 py-1.5 rounded-lg shadow-lg shadow-amber-500/20 text-[10px] tracking-widest uppercase transition-all flex items-center gap-1.5 ml-auto cursor-pointer">
-                                <i class="fa-solid fa-pause"></i> Pause
-                            </button>`;
+                            actionButtons = `<div class="flex items-center justify-end gap-2">
+                                <button onclick="toggleCampaignEngine(${c.id}, 'pause')" class="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-black px-3 py-1.5 rounded-lg shadow-md shadow-amber-500/20 text-[10px] tracking-widest uppercase transition-all flex items-center gap-1.5 cursor-pointer shrink-0">
+                                    <i class="fa-solid fa-pause"></i> Pause
+                                </button>
+                                ${deleteBtn}
+                            </div>`;
                         } else {
-                            ctrlBtn = `<span class="text-slate-500 font-mono text-xs italic">Completed</span>`;
+                            actionButtons = `<div class="flex items-center justify-end gap-2">
+                                <span class="text-slate-500 font-mono text-xs italic">Completed</span>
+                                ${deleteBtn}
+                            </div>`;
                         }
 
+                        // Strictly corrected the stray '}' syntax in the badge span below!
                         return `
                         <tr class="hover:bg-slate-800/30 transition-colors">
                             <td class="p-4 px-6 font-semibold text-white font-sans">${c.name}</td>
                             <td class="p-4 px-6 font-sans">
                                 <span class="px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider border ${badgeStyle}">
                                     ${c.status}
-                                }</span>
+                                </span>
                             </td>
                             <td class="p-4 px-6 text-center text-slate-300">${(c.loaded || 0).toLocaleString()}</td>
                             <td class="p-4 px-6 text-center text-emerald-400 font-bold">${(c.sent || 0).toLocaleString()}</td>
                             <td class="p-4 px-6 text-center text-amber-400/90">${(c.pending || 0).toLocaleString()}</td>
                             <td class="p-4 px-6 text-center text-rose-400">${(c.failed || 0).toLocaleString()}</td>
-                            <td class="p-4 px-6 text-right">${ctrlBtn}</td>
+                            <td class="p-4 px-6 text-right">${actionButtons}</td>
                         </tr>`;
                     }).join('');
                 } else {
@@ -292,7 +320,7 @@
             try {
                 const res = await fetch('/api/campaigns/upload-csv', { method: 'POST', body: formData });
                 const data = await res.json();
-                showToast(data.message || "Campaign injected as draft successfully!");
+                showToast(data.message || "Campaign injected successfully!");
                 e.target.reset();
                 fetchStats();
             } catch(err) { showToast("Error uploading CSV leads", true); }
@@ -305,35 +333,35 @@
                     body: JSON.stringify({ action })
                 });
                 const data = await res.json();
-                showToast(data.message || (action === 'start' ? "Dispatched!" : "Paused")); 
-                fetchStats();
+                showToast(data.message); fetchStats();
             } catch(e) { showToast("Action failed", true); }
         }
 
+        // ======= NEW: INDIVIDUAL CAMPAIGN DELETE TRIGGER =======
+        async function deleteCampaignBatch(id, name) {
+            if (!confirm(`⚠️ DANGER: क्या आप सच में Campaign "${name}" और उसकी सारी Leads को मिटाना चाहती हैं?\n\nयह एक्शन वापस नहीं लिया जा सकेगा!`)) return;
+            
+            try {
+                const res = await fetch(`/api/campaigns/${id}`, { method: 'DELETE' });
+                const data = await res.json();
+                showToast(data.message || "Deleted successfully!");
+                fetchStats();
+            } catch(e) { showToast("Failed to delete campaign", true); }
+        }
+
         function openActionModal(from_email, to_email, subject, type) {
-            let targetEmail = to_email;
-            let message = "";
-            if (type === 'reply') { 
-                message = prompt(`REPLYING TO PROSPECT:\nTo: ${to_email}\nFrom your Gmail: ${from_email}\n\nType your custom message below:`); 
-            } else { 
-                targetEmail = prompt(`FORWARDING THREAD FROM: ${from_email}\n\nEnter recipient email to forward this to:`); 
-                if (!targetEmail) return; 
-                message = prompt(`Enter custom body for forwarded email:`); 
-            }
+            let targetEmail = to_email; let message = "";
+            if (type === 'reply') { message = prompt(`REPLYING TO PROSPECT:\nTo: ${to_email}\nFrom your Gmail: ${from_email}\n\nType your custom message below:`); } 
+            else { targetEmail = prompt(`FORWARDING THREAD FROM: ${from_email}\n\nEnter recipient email to forward this to:`); if (!targetEmail) return; message = prompt(`Enter custom body for forwarded email:`); }
             
             if (message !== null && message.trim() !== "") {
-                fetch('/api/replies/send-action', { 
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }, 
-                    body: JSON.stringify({ from_email, to_email: targetEmail, subject, body: message }) 
-                })
-                .then(res => res.json())
-                .then(data => showToast(data.message || "Action queued to local Python worker!"))
+                fetch('/api/replies/send-action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from_email, to_email: targetEmail, subject, body: message }) })
+                .then(res => res.json()).then(data => showToast(data.message || "Action queued to local Python worker!"))
                 .catch(err => showToast("Failed to queue CRM action", true));
             }
         }
 
-        fetchStats();
-        setInterval(fetchStats, 5000);
+        fetchStats(); setInterval(fetchStats, 5000);
     </script>
 </body>
 </html>
