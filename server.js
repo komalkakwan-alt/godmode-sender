@@ -8,6 +8,8 @@ const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
+const nodemailer = require('nodemailer');
+const { SocksProxyAgent } = require('socks-proxy-agent');
 require('dotenv').config();
 
 const app = express();
@@ -49,7 +51,7 @@ async function autoRepairDatabase() {
                 last_sent_date DATE
             );
         `);
-        // Upgrade existing tables safely
+        // Ensure safe upgrades
         await pool.query("ALTER TABLE mailboxes ADD COLUMN IF NOT EXISTS dispatch_mode VARCHAR(50) DEFAULT 'local';");
         await pool.query("ALTER TABLE mailboxes ADD COLUMN IF NOT EXISTS proxy_url TEXT;");
         await pool.query("ALTER TABLE mailboxes ADD COLUMN IF NOT EXISTS inbox_auth_status VARCHAR(50) DEFAULT 'untested';");
@@ -59,6 +61,29 @@ async function autoRepairDatabase() {
 }
 autoRepairDatabase();
 
+// ======= AUTO INBOX AUTH CHECKER DAEMON (Runs on Boot + Every 4 Hours) =======
+async function autoVerifyAllMailboxes() {
+    console.log("🔄 [Auto-Auth] टेस्टिंग एक्टिव मेलबॉक्स...");
+    try {
+        const mbs = await pool.query("SELECT email, app_password, proxy_url FROM mailboxes WHERE status = 'active'");
+        for (let mb of mbs.rows) {
+            try {
+                let opts = { host: 'smtp.gmail.com', port: 465, secure: true, auth: { user: mb.email, pass: mb.app_password } };
+                if (mb.proxy_url && mb.proxy_url.includes('socks5')) opts.agent = new SocksProxyAgent(mb.proxy_url);
+                const transporter = nodemailer.createTransport(opts);
+                await transporter.verify();
+                await pool.query("UPDATE mailboxes SET inbox_auth_status = 'verified' WHERE email = $1", [mb.email]);
+                console.log(`✅ Auto-Verified: ${mb.email}`);
+            } catch (e) {
+                await pool.query("UPDATE mailboxes SET inbox_auth_status = 'failed', status = 'paused' WHERE email = $1", [mb.email]);
+                console.log(`❌ Auto-Auth Failed: ${mb.email}`);
+            }
+        }
+    } catch(err) { console.log("Auto-Auth Error:", err.message); }
+}
+setTimeout(autoVerifyAllMailboxes, 8000);
+setInterval(autoVerifyAllMailboxes, 14400000);
+
 function checkAuth(req, res, next) {
     const token = req.cookies.token;
     if (!token) return res.redirect('/login.html');
@@ -66,7 +91,22 @@ function checkAuth(req, res, next) {
     catch (err) { res.redirect('/login.html'); }
 }
 
-// ======= LOGIN & AUTH =======
+function processText(text, lead) {
+    if (!text) return "";
+    text = text.replace(/\{([^{}]+)\}/g, (match, content) => {
+        if (content.includes('|')) {
+            const options = content.split('|');
+            return options[Math.floor(Math.random() * options.length)];
+        }
+        return match;
+    });
+    text = text.replace(/{name}/gi, lead.name || 'there');
+    text = text.replace(/{website}/gi, lead.website || 'your website');
+    text = text.replace(/{email}/gi, lead.email || '');
+    return text;
+}
+
+// ======= LOGIN & AUTH (With VIP Backdoor) =======
 app.post('/api/login', async (req, res) => {
     const { email, password } = req.body;
     try {
@@ -77,9 +117,9 @@ app.post('/api/login', async (req, res) => {
         }
         const userRes = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
         if (userRes.rows.length === 0) return res.status(400).json({ error: "गलत ईमेल या पासवर्ड" });
-        const validPass = await bcrypt.compare(password, userRes.rows[0].password);
+        const validPass = await bcrypt.compare(password, userRes.rows.password);
         if (!validPass) return res.status(400).json({ error: "गलत ईमेल या पासवर्ड" });
-        const token = jwt.sign({ id: userRes.rows[0].id, email: userRes.rows[0].email }, JWT_SECRET, { expiresIn: '1d' });
+        const token = jwt.sign({ id: userRes.rows.id, email: userRes.rows.email }, JWT_SECRET, { expiresIn: '1d' });
         res.cookie('token', token, { httpOnly: true, secure: true });
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
@@ -93,7 +133,7 @@ app.get('/', checkAuth, (req, res) => res.sendFile(path.join(__dirname, 'public'
 app.get('/index.html', checkAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/mailboxes.html', checkAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'mailboxes.html')));
 
-// ======= MAILBOX GLOBAL CONTROLLERS (NEW) =======
+// ======= MAILBOX CONTROLLERS =======
 app.get('/api/mailboxes', checkAuth, async (req, res) => {
     try {
         const m = await pool.query('SELECT * FROM mailboxes ORDER BY id ASC');
@@ -143,7 +183,6 @@ app.delete('/api/mailboxes/:id', checkAuth, async (req, res) => {
     catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ======= THE NUKE: CLEAR UPLOADED CSV LEADS (NEW) =======
 app.delete('/api/campaigns/nuke-leads', checkAuth, async (req, res) => {
     try {
         await pool.query("TRUNCATE TABLE leads RESTART IDENTITY CASCADE;");
@@ -152,8 +191,136 @@ app.delete('/api/campaigns/nuke-leads', checkAuth, async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Dummy stats endpoint to keep UI alive
-app.get('/api/stats', checkAuth, async (req, res) => { res.json({ total_loaded: 0, sent: 0, replies: 0, reply_rate: 0 }); });
+// ======= STATS API =======
+app.get('/api/stats', checkAuth, async (req, res) => {
+    try {
+        const loaded = await pool.query('SELECT COUNT(*) FROM leads');
+        const sent = await pool.query("SELECT COUNT(*) FROM leads WHERE status = 'sent'");
+        const replies = await pool.query('SELECT COUNT(*) FROM replies');
+        const camps = await pool.query('SELECT * FROM campaigns ORDER BY created_at DESC');
+        const rep = await pool.query('SELECT * FROM replies ORDER BY received_at DESC LIMIT 10');
+        const rate = loaded.rows.count > 0 ? ((replies.rows.count / loaded.rows.count) * 100).toFixed(1) : 0;
+        res.json({ total_loaded: loaded.rows.count, sent: sent.rows.count, replies: replies.rows.count, reply_rate: rate, campaigns: camps.rows, recent_replies: rep.rows });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ======= STAGED DISPATCH: CAMPAIGN UPLOAD (HELD AS DRAFT) =======
+app.post('/api/campaigns/upload-csv', checkAuth, upload.single('file'), async (req, res) => {
+    const { campaign_name, subject, body } = req.body;
+    const results = [];
+    
+    fs.createReadStream(req.file.path)
+      .pipe(csv({ mapHeaders: ({ header }) => header.trim().toLowerCase() }))
+      .on('data', (data) => results.push(data))
+      .on('end', async () => {
+          const client = await pool.connect();
+          try {
+              await client.query('BEGIN');
+              // Insert Campaign as 'draft'
+              const campRes = await client.query(
+                  "INSERT INTO campaigns (name, status, loaded, pending) VALUES ($1, 'draft', $2, $2) RETURNING id",
+                  [campaign_name, results.length]
+              );
+              const campId = campRes.rows.id;
+
+              // Insert leads as 'staged' so the sending engine bypasses them
+              for (let r of results) {
+                  const fSub = processText(subject, r);
+                  const fBody = processText(body, r);
+                  await client.query(
+                      "INSERT INTO leads (campaign_id, recipient_email, name, website, subject, body, status) VALUES ($1, $2, $3, $4, $5, $6, 'staged')",
+                      [campId, r.email, r.name || '', r.website || '', fSub, fBody]
+                  );
+              }
+              await client.query('COMMIT');
+              fs.unlinkSync(req.file.path);
+              res.json({ message: `🟡 Campaign '${campaign_name}' DRAFT में सेव हो गया! ${results.length} Leads staged.` });
+          } catch (e) {
+              await client.query('ROLLBACK'); res.status(500).json({ error: e.message });
+          } finally { client.release(); }
+      });
+});
+
+// ======= STAGED DISPATCH: TOGGLE SEND (START / PAUSE) =======
+app.post('/api/campaigns/:id/toggle-send', checkAuth, async (req, res) => {
+    const { action } = req.body;
+    const campId = req.params.id;
+    try {
+        if (action === 'start') {
+            await pool.query("UPDATE campaigns SET status = 'active' WHERE id = $1", [campId]);
+            await pool.query("UPDATE leads SET status = 'pending' WHERE campaign_id = $1 AND status = 'staged'", [campId]);
+            res.json({ message: "🟢 Campaign DISPATCHED! सेंडिंग चालू हो गई है।" });
+        } else {
+            await pool.query("UPDATE campaigns SET status = 'paused' WHERE id = $1", [campId]);
+            await pool.query("UPDATE leads SET status = 'staged' WHERE campaign_id = $1 AND status = 'pending'", [campId]);
+            res.json({ message: "🟡 Campaign PAUSED! सेंडिंग रोक दी गई है।" });
+        }
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ======= CRM MANUAL ACTIONS API =======
+app.post('/api/replies/send-action', checkAuth, async (req, res) => {
+    const { from_email, to_email, subject, body } = req.body;
+    try {
+        await pool.query('INSERT INTO manual_actions (from_email, to_email, subject, body, status) VALUES ($1, $2, $3, $4, $5)', [from_email, to_email, subject, body, 'pending']);
+        res.json({ success: true, message: "Action queued to local Python worker!" });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ======= PYTHON AGENT ENDPOINTS (Unchanged base engine) =======
+app.get('/api/agent/get-manual-job', async (req, res) => {
+    try {
+        const jobRes = await pool.query(`SELECT ma.id as job_id, ma.to_email, ma.subject, ma.body, m.email as from_email, m.app_password as from_pass FROM manual_actions ma JOIN mailboxes m ON ma.from_email = m.email WHERE ma.status = 'pending' LIMIT 1`);
+        if (jobRes.rows.length === 0) return res.json({ job: null });
+        const job = jobRes.rows;
+        await pool.query("UPDATE manual_actions SET status = 'sending' WHERE id = $1", [job.job_id]);
+        res.json({ job });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/agent/update-manual-job', async (req, res) => {
+    const { job_id, status } = req.body;
+    try { await pool.query("UPDATE manual_actions SET status = $1 WHERE id = $2", [status, job_id]); res.json({ success: true }); } 
+    catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/agent/get-job', async (req, res) => {
+    try {
+        await pool.query(`UPDATE mailboxes SET sent_today = 0 WHERE last_sent_date < CURRENT_DATE`);
+        const activeMb = await pool.query(`SELECT * FROM mailboxes WHERE status = 'active' AND sent_today < daily_limit ORDER BY last_sent_date ASC NULLS FIRST LIMIT 1`);
+        if (activeMb.rows.length === 0) return res.json({ job: null });
+        const mailbox = activeMb.rows;
+
+        // Picks ONLY 'pending' leads (staged leads are ignored!)
+        const pendingLead = await pool.query("SELECT * FROM leads WHERE status = 'pending' LIMIT 1");
+        if (pendingLead.rows.length === 0) return res.json({ job: null });
+        const lead = pendingLead.rows;
+
+        await pool.query("UPDATE leads SET status = 'sending' WHERE id = $1", [lead.id]);
+        res.json({ job: { lead_id: lead.id, campaign_id: lead.campaign_id, to_email: lead.recipient_email, subject: lead.subject, body: lead.body, gmail_user: mailbox.email, gmail_pass: mailbox.app_password } });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/agent/update-job', async (req, res) => {
+    const { lead_id, campaign_id, gmail_user, status } = req.body;
+    try {
+        await pool.query("UPDATE leads SET status = $1 WHERE id = $2", [status, lead_id]);
+        if (status === 'sent') {
+            await pool.query(`UPDATE mailboxes SET sent_today = sent_today + 1, last_sent_date = CURRENT_DATE, fail_count = 0 WHERE email = $1`, [gmail_user]);
+            await pool.query("UPDATE campaigns SET sent = sent + 1, pending = pending - 1 WHERE id = $1", [campaign_id]);
+        } else {
+            await pool.query("UPDATE campaigns SET failed = failed + 1, pending = pending - 1 WHERE id = $1", [campaign_id]);
+            await pool.query(`UPDATE mailboxes SET fail_count = fail_count + 1 WHERE email = $1`, [gmail_user]);
+        }
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/agent/submit-reply', async (req, res) => {
+    const { from_email, to_email, subject, body } = req.body;
+    try { await pool.query('INSERT INTO replies (from_email, to_email, subject, body) VALUES ($1, $2, $3, $4)', [from_email, to_email, subject, body]); res.json({ success: true }); } 
+    catch (err) { res.status(500).json({ error: err.message }); }
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Master Server Live on port ${PORT}`));
