@@ -1,100 +1,334 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - God-Mode Sender</title>
+    <title>God-Mode | Command Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = { darkMode: 'class', theme: { extend: { colors: { slate: { 850: '#1e293b' } } } } }
+    </script>
 </head>
-<body class="bg-gray-900 text-gray-200 flex">
-    <div class="w-64 bg-black p-6 flex flex-col space-y-4 min-h-screen">
-        <h1 class="text-2xl font-bold text-white mb-8">God-Mode Sender</h1>
-        <a href="index.html" class="text-blue-400 font-medium">📊 My Stats</a>
-        <a href="mailboxes.html" class="hover:text-blue-400 font-medium">📧 Mailboxes</a>
-        <a href="/api/logout" class="hover:text-red-400 font-medium mt-auto">🚪 Logout</a>
+<body class="bg-[#0b0f19] text-slate-100 font-sans min-h-screen flex selection:bg-purple-500 selection:text-white overflow-x-hidden">
+
+    <div id="toast" class="fixed top-5 right-5 z-50 flex items-center gap-3 bg-slate-800 border border-slate-700 px-4 py-3 rounded-xl shadow-2xl transform translate-x-full opacity-0 transition-all duration-300 pointer-events-none">
+        <div id="toast-icon" class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"></div>
+        <p id="toast-msg" class="text-sm font-medium text-white"></p>
     </div>
 
-    <div class="flex-1 p-10 overflow-auto">
-        <h2 class="text-3xl font-bold mb-8">My Stats</h2>
+    <aside class="w-64 bg-[#111827] border-r border-slate-800 flex flex-col justify-between shrink-0">
+        <div>
+            <div class="h-20 flex items-center px-6 border-b border-slate-800">
+                <span class="text-xl font-black tracking-wider bg-gradient-to-r from-purple-400 via-indigo-300 to-white bg-clip-text text-transparent">
+                    GOD-MODE
+                </span>
+            </div>
+            <nav class="p-4 space-y-1">
+                <a href="/index.html" class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-white bg-purple-600/20 border border-purple-500/30 shadow-inner">
+                    <i class="fa-solid fa-chart-line w-5 text-purple-400"></i> Dashboard
+                </a>
+                <a href="/mailboxes.html" class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all">
+                    <i class="fa-solid fa-inbox w-5"></i> Dispatch Hub
+                </a>
+            </nav>
+        </div>
+        <div class="p-4 border-t border-slate-800">
+            <a href="/api/logout" class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-rose-400 hover:bg-rose-500/10 transition-all">
+                <i class="fa-solid fa-right-from-bracket"></i> Logout
+            </a>
+        </div>
+    </aside>
+
+    <main class="flex-1 p-8 overflow-y-auto max-w-7xl mx-auto space-y-8">
         
-        <div class="grid grid-cols-4 gap-6 mb-10">
-            <div class="bg-gray-800 p-6 rounded-lg shadow-lg"><h3 class="text-gray-400 uppercase text-sm">Total Loaded</h3><p id="totalLoaded" class="text-4xl font-bold text-white mt-2">0</p></div>
-            <div class="bg-gray-800 p-6 rounded-lg shadow-lg"><h3 class="text-gray-400 uppercase text-sm">Sent</h3><p id="totalSent" class="text-4xl font-bold text-green-500 mt-2">0</p></div>
-            <div class="bg-gray-800 p-6 rounded-lg shadow-lg"><h3 class="text-gray-400 uppercase text-sm">Replies</h3><p id="totalReplies" class="text-4xl font-bold text-blue-500 mt-2">0</p></div>
-            <div class="bg-gray-800 p-6 rounded-lg shadow-lg"><h3 class="text-gray-400 uppercase text-sm">Reply Rate</h3><p id="replyRate" class="text-4xl font-bold text-yellow-500 mt-2">0%</p></div>
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900/40 p-6 rounded-2xl border border-slate-800 shadow-sm">
+            <div>
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span class="text-[10px] font-mono tracking-widest text-emerald-400 uppercase">System Engine Live</span>
+                </div>
+                <h1 class="text-2xl font-bold text-white tracking-tight">Campaign Telemetry & Ingest</h1>
+            </div>
+            <div class="hidden md:flex items-center gap-6 bg-slate-950/60 border border-slate-800 px-5 py-2.5 rounded-xl font-mono text-xs">
+                <div>
+                    <span class="text-slate-500 block text-[9px]">DAEMON SYNC</span>
+                    <span class="text-indigo-400 font-bold">5000 ms</span>
+                </div>
+                <div class="w-px h-6 bg-slate-800"></div>
+                <div>
+                    <span class="text-slate-500 block text-[9px]">DATABASE STATUS</span>
+                    <span class="text-emerald-400 font-bold">HEALTHY</span>
+                </div>
+            </div>
         </div>
 
-        <h3 class="text-xl font-bold mb-4">By campaign</h3>
-        <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden mb-10">
-            <table class="w-full text-left">
-                <thead class="bg-gray-700 text-gray-400 uppercase text-sm"><tr><th class="p-4">Campaign</th><th class="p-4">Status</th><th class="p-4">Loaded</th><th class="p-4">Sent</th><th class="p-4">Pending</th><th class="p-4">Failed</th></tr></thead>
-                <tbody id="campaignTable" class="divide-y divide-gray-700"></tbody>
-            </table>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div class="bg-[#141a29] border border-purple-500/20 rounded-2xl p-6 relative overflow-hidden shadow-xl flex flex-col justify-between">
+                <div class="absolute -right-6 -bottom-6 w-28 h-28 bg-purple-500/10 rounded-full blur-2xl pointer-events-none"></div>
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-xs font-bold text-purple-400 uppercase tracking-wider">Total Loaded</span>
+                    <i class="fa-solid fa-database text-purple-500/30 text-xl"></i>
+                </div>
+                <p id="totalLoaded" class="text-4xl font-black text-white font-mono tracking-tight">0</p>
+            </div>
+
+            <div class="bg-[#141a29] border border-emerald-500/20 rounded-2xl p-6 relative overflow-hidden shadow-xl flex flex-col justify-between">
+                <div class="absolute -right-6 -bottom-6 w-28 h-28 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none"></div>
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-xs font-bold text-emerald-400 uppercase tracking-wider">Dispatched</span>
+                    <i class="fa-solid fa-paper-plane text-emerald-500/30 text-xl"></i>
+                </div>
+                <p id="totalSent" class="text-4xl font-black text-emerald-400 font-mono tracking-tight">0</p>
+            </div>
+
+            <div class="bg-[#141a29] border border-cyan-500/20 rounded-2xl p-6 relative overflow-hidden shadow-xl flex flex-col justify-between">
+                <div class="absolute -right-6 -bottom-6 w-28 h-28 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none"></div>
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-xs font-bold text-cyan-400 uppercase tracking-wider">Inbox Replies</span>
+                    <i class="fa-solid fa-comments text-cyan-500/30 text-xl"></i>
+                </div>
+                <p id="totalReplies" class="text-4xl font-black text-cyan-400 font-mono tracking-tight">0</p>
+            </div>
+
+            <div class="bg-[#141a29] border border-amber-500/20 rounded-2xl p-6 relative overflow-hidden shadow-xl flex flex-col justify-between">
+                <div class="absolute -right-6 -bottom-6 w-28 h-28 bg-amber-500/10 rounded-full blur-2xl pointer-events-none"></div>
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-xs font-bold text-amber-400 uppercase tracking-wider">Reply Rate</span>
+                    <i class="fa-solid fa-bolt text-amber-500/30 text-xl"></i>
+                </div>
+                <p id="replyRate" class="text-4xl font-black text-amber-400 font-mono tracking-tight">0%</p>
+            </div>
         </div>
 
-        <h3 class="text-xl font-bold mb-4 mt-10">💬 My Replies</h3>
-        <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden mb-10">
-            <table class="w-full text-left">
-                <thead class="bg-gray-700 text-gray-400 uppercase text-sm"><tr><th class="p-4">From</th><th class="p-4">Subject</th><th class="p-4">Preview</th><th class="p-4">Action</th></tr></thead>
-                <tbody id="repliesTable" class="divide-y divide-gray-700"></tbody>
-            </table>
-        </div>
+        <div class="bg-gradient-to-br from-slate-900/90 to-[#151928] border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+            <div class="absolute top-0 right-0 w-96 h-96 bg-purple-600/5 rounded-full blur-3xl pointer-events-none"></div>
+            
+            <div class="flex items-center gap-3.5 mb-6">
+                <div class="w-11 h-11 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 shadow-inner shrink-0">
+                    <i class="fa-solid fa-cloud-arrow-up text-lg"></i>
+                </div>
+                <div>
+                    <h2 class="text-lg font-bold text-white">Ingest New Campaign (CSV)</h2>
+                    <p class="text-xs text-slate-400">Required CSV headers: <code class="text-purple-300 bg-slate-950 px-1.5 py-0.5 rounded font-mono">name</code>, <code class="text-purple-300 bg-slate-950 px-1.5 py-0.5 rounded font-mono">website</code>, <code class="text-purple-300 bg-slate-950 px-1.5 py-0.5 rounded font-mono">email</code></p>
+                </div>
+            </div>
 
-        <div class="bg-gray-800 p-6 rounded-lg">
-            <h3 class="text-xl font-bold mb-4">Upload Campaign CSV</h3>
-            <p class="text-gray-400 mb-4">CSV must have columns: <b>name, website, email</b></p>
-            <form id="csvForm" enctype="multipart/form-data" class="space-y-4">
-                <input type="text" name="campaign_name" placeholder="Campaign Name" class="w-full p-3 bg-gray-700 rounded" required>
-                <input type="text" name="subject" placeholder='Subject e.g: Question about {website}' class="w-full p-3 bg-gray-700 rounded" required>
-                <textarea name="body" placeholder='Body e.g: {Hi|Hello} {name}, I visited {website}...' class="w-full p-3 bg-gray-700 rounded" required></textarea>
-                <input type="file" name="file" accept=".csv" class="w-full p-3 bg-gray-700 rounded" required>
-                <button type="submit" class="bg-purple-600 hover:bg-purple-700 px-6 py-3 rounded font-bold">Create & Upload</button>
+            <form id="csvForm" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Campaign Batch Name</label>
+                        <input type="text" name="campaign_name" placeholder="e.g. US_Founders_Outreach_V1" class="w-full bg-slate-950/80 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-purple-500 transition-all font-mono placeholder:text-slate-600" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Subject Line (Supports {Spintax})</label>
+                        <input type="text" name="subject" placeholder="Question regarding {website}" class="w-full bg-slate-950/80 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-purple-500 transition-all font-mono placeholder:text-slate-600" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Target Leads File (.CSV)</label>
+                        <input type="file" name="file" accept=".csv" class="w-full text-xs text-slate-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-purple-600/20 file:text-purple-300 hover:file:bg-purple-600/30 transition-all cursor-pointer bg-slate-950/80 border border-slate-800 rounded-xl p-1.5" required>
+                    </div>
+                </div>
+
+                <div class="flex flex-col justify-between space-y-4">
+                    <div class="flex-1 flex flex-col">
+                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Email Pitch Body (HTML or Text)</label>
+                        <textarea name="body" placeholder="Hey {name},&#10;&#10;I looked at {website} and noticed..." class="w-full flex-1 bg-slate-950/80 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-purple-500 transition-all font-mono placeholder:text-slate-600 resize-none" rows="5" required></textarea>
+                    </div>
+
+                    <button type="submit" class="w-full bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xs py-3.5 px-6 rounded-xl shadow-xl hover:shadow-purple-500/25 transition-all tracking-widest uppercase flex items-center justify-center gap-2 cursor-pointer">
+                        <i class="fa-solid fa-cloud-arrow-up"></i> Upload & Hold in Draft
+                    </button>
+                </div>
             </form>
         </div>
-    </div>
+
+        <div class="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+            <div class="px-6 py-4 border-b border-slate-800 bg-slate-900/90 flex justify-between items-center">
+                <h3 class="text-xs font-black tracking-wider text-slate-400 uppercase flex items-center gap-2">
+                    <i class="fa-solid fa-layer-group text-purple-400"></i> Active Campaign Batches
+                </h3>
+                <span class="text-[10px] font-mono text-slate-500">Live DB Stream</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="border-b border-slate-800 text-[10px] font-black uppercase text-slate-500 bg-slate-950/40 font-sans">
+                            <th class="py-3.5 px-6">Campaign Batch</th>
+                            <th class="py-3.5 px-6">Status</th>
+                            <th class="py-3.5 px-6 text-center">Loaded</th>
+                            <th class="py-3.5 px-6 text-center">Sent</th>
+                            <th class="py-3.5 px-6 text-center">Pending</th>
+                            <th class="py-3.5 px-6 text-center">Failed</th>
+                            <th class="py-3.5 px-6 text-right">Dispatch Control</th>
+                        </tr>
+                    </thead>
+                    <tbody id="campaignTable" class="divide-y divide-slate-800/60 text-xs font-mono">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+            <div class="px-6 py-4 border-b border-slate-800 bg-slate-900/90 flex justify-between items-center">
+                <h3 class="text-xs font-black tracking-wider text-slate-400 uppercase flex items-center gap-2 font-sans">
+                    <i class="fa-solid fa-inbox text-cyan-400"></i> Prospect Replies Feed
+                </h3>
+                <span class="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20">IMAP Listener Active</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="border-b border-slate-800 text-[10px] font-black uppercase text-slate-500 bg-slate-950/40 font-sans">
+                            <th class="py-3.5 px-6">Prospect Address</th>
+                            <th class="py-3.5 px-6">Subject Thread</th>
+                            <th class="py-3.5 px-6">Message Preview</th>
+                            <th class="py-3.5 px-6 text-right">Instant CRM Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="repliesTable" class="divide-y divide-slate-800/60 text-xs">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
 
     <script>
+        function showToast(msg, isError = false) {
+            const t = document.getElementById('toast');
+            const icon = document.getElementById('toast-icon');
+            document.getElementById('toast-msg').innerText = msg;
+            
+            icon.className = `w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isError ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'}`;
+            icon.innerHTML = isError ? '<i class="fa-solid fa-triangle-exclamation"></i>' : '<i class="fa-solid fa-check font-bold"></i>';
+            
+            t.classList.remove('translate-x-full', 'opacity-0');
+            setTimeout(() => t.classList.add('translate-x-full', 'opacity-0'), 3500);
+        }
+
         async function fetchStats() {
-            const res = await fetch('/api/stats');
-            const data = await res.json();
-            document.getElementById('totalLoaded').innerText = data.total_loaded;
-            document.getElementById('totalSent').innerText = data.sent;
-            document.getElementById('totalReplies').innerText = data.replies;
-            document.getElementById('replyRate').innerText = data.reply_rate + '%';
+            try {
+                const res = await fetch('/api/stats');
+                const data = await res.json();
+                
+                document.getElementById('totalLoaded').innerText = (data.total_loaded || 0).toLocaleString();
+                document.getElementById('totalSent').innerText = (data.sent || 0).toLocaleString();
+                document.getElementById('totalReplies').innerText = (data.replies || 0).toLocaleString();
+                document.getElementById('replyRate').innerText = (data.reply_rate || 0) + '%';
 
-            const cTable = document.getElementById('campaignTable');
-            cTable.innerHTML = '';
-            data.campaigns.forEach(c => {
-                cTable.innerHTML += `<tr class="hover:bg-gray-700"><td class="p-4">${c.name}</td><td class="p-4"><span class="bg-yellow-500 text-black px-2 py-1 rounded text-xs">${c.status}</span></td><td class="p-4">${c.loaded}</td><td class="p-4 text-green-500">${c.sent}</td><td class="p-4 text-yellow-500">${c.pending}</td><td class="p-4 text-red-500">${c.failed}</td></tr>`;
-            });
+                const cTable = document.getElementById('campaignTable');
+                if(data.campaigns && data.campaigns.length > 0) {
+                    cTable.innerHTML = data.campaigns.map(c => {
+                        let badgeStyle = c.status === 'active' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 animate-pulse' : 
+                                         c.status === 'paused' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 
+                                         'bg-purple-500/10 text-purple-400 border-purple-500/20';
 
-            const rTable = document.getElementById('repliesTable');
-            rTable.innerHTML = '';
-            data.recent_replies.forEach(r => {
-                const safeSubject = r.subject.replace(/'/g, "\\'");
-                const safeFrom = r.from_email.replace(/'/g, "\\'");
-                const safeTo = r.to_email.replace(/'/g, "\\'");
-                rTable.innerHTML += `<tr class="hover:bg-gray-700"><td class="p-4 text-blue-400">${r.from_email}</td><td class="p-4">${r.subject}</td><td class="p-4 text-gray-400">${r.body.substring(0, 30)}...</td><td class="p-4 space-x-2"><button onclick="openActionModal('${safeTo}', '${safeFrom}', 'Re: ${safeSubject}', 'reply')" class="bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-xs">Reply</button><button onclick="openActionModal('${safeTo}', '', 'Fwd: ${safeSubject}', 'forward')" class="bg-yellow-600 hover:bg-yellow-700 px-3 py-1 rounded text-xs">Forward</button></td></tr>`;
-            });
+                        let ctrlBtn = '';
+                        if (c.status === 'draft' || c.status === 'paused') {
+                            ctrlBtn = `<button onclick="toggleCampaignEngine(${c.id}, 'start')" class="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black px-3.5 py-1.5 rounded-lg shadow-lg shadow-emerald-500/20 text-[10px] tracking-widest uppercase transition-all flex items-center gap-1.5 ml-auto cursor-pointer">
+                                <i class="fa-solid fa-play"></i> Dispatch Now
+                            </button>`;
+                        } else if (c.status === 'active') {
+                            ctrlBtn = `<button onclick="toggleCampaignEngine(${c.id}, 'pause')" class="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-black px-3.5 py-1.5 rounded-lg shadow-lg shadow-amber-500/20 text-[10px] tracking-widest uppercase transition-all flex items-center gap-1.5 ml-auto cursor-pointer">
+                                <i class="fa-solid fa-pause"></i> Pause
+                            </button>`;
+                        } else {
+                            ctrlBtn = `<span class="text-slate-500 font-mono text-xs italic">Completed</span>`;
+                        }
+
+                        return `
+                        <tr class="hover:bg-slate-800/30 transition-colors">
+                            <td class="p-4 px-6 font-semibold text-white font-sans">${c.name}</td>
+                            <td class="p-4 px-6 font-sans">
+                                <span class="px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider border ${badgeStyle}">
+                                    ${c.status}
+                                }</span>
+                            </td>
+                            <td class="p-4 px-6 text-center text-slate-300">${(c.loaded || 0).toLocaleString()}</td>
+                            <td class="p-4 px-6 text-center text-emerald-400 font-bold">${(c.sent || 0).toLocaleString()}</td>
+                            <td class="p-4 px-6 text-center text-amber-400/90">${(c.pending || 0).toLocaleString()}</td>
+                            <td class="p-4 px-6 text-center text-rose-400">${(c.failed || 0).toLocaleString()}</td>
+                            <td class="p-4 px-6 text-right">${ctrlBtn}</td>
+                        </tr>`;
+                    }).join('');
+                } else {
+                    cTable.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-600 font-sans italic">No Campaigns currently loaded in database stream</td></tr>`;
+                }
+
+                const rTable = document.getElementById('repliesTable');
+                if(data.recent_replies && data.recent_replies.length > 0) {
+                    rTable.innerHTML = data.recent_replies.map(r => {
+                        const safeSubject = (r.subject || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                        const safeFrom = (r.from_email || '').replace(/'/g, "\\'");
+                        const safeTo = (r.to_email || '').replace(/'/g, "\\'");
+                        const shortBody = (r.body || '').substring(0, 42).replace(/</g, '&lt;') + '...';
+
+                        return `
+                        <tr class="hover:bg-slate-800/30 transition-colors">
+                            <td class="p-4 px-6 font-mono text-cyan-300 font-medium">${r.from_email}</td>
+                            <td class="p-4 px-6 font-semibold text-white">${r.subject}</td>
+                            <td class="p-4 px-6 text-slate-400 italic text-xs max-w-xs truncate">${shortBody}</td>
+                            <td class="p-4 px-6 text-right space-x-1.5 font-sans shrink-0">
+                                <button onclick="openActionModal('${safeTo}', '${safeFrom}', 'Re: ${safeSubject}', 'reply')" class="bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer">
+                                    <i class="fa-solid fa-reply mr-1"></i> Reply
+                                </button>
+                                <button onclick="openActionModal('${safeTo}', '', 'Fwd: ${safeSubject}', 'forward')" class="bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer">
+                                    <i class="fa-solid fa-share mr-1"></i> Fwd
+                                </button>
+                            </td>
+                        </tr>`;
+                    }).join('');
+                } else {
+                    rTable.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-slate-600 font-sans italic">Inbox feed quiet. Waiting for prospect replies...</td></tr>`;
+                }
+
+            } catch (err) { console.log("Stats poll sync error"); }
         }
 
         document.getElementById('csvForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const formData = new FormData(e.target);
-            const res = await fetch('/api/campaigns/upload-csv', { method: 'POST', body: formData });
-            const data = await res.json();
-            alert(data.message);
-            fetchStats();
+            try {
+                const res = await fetch('/api/campaigns/upload-csv', { method: 'POST', body: formData });
+                const data = await res.json();
+                showToast(data.message || "Campaign injected as draft successfully!");
+                e.target.reset();
+                fetchStats();
+            } catch(err) { showToast("Error uploading CSV leads", true); }
         });
+
+        async function toggleCampaignEngine(id, action) {
+            try {
+                const res = await fetch(`/api/campaigns/${id}/toggle-send`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action })
+                });
+                const data = await res.json();
+                showToast(data.message || (action === 'start' ? "Dispatched!" : "Paused")); 
+                fetchStats();
+            } catch(e) { showToast("Action failed", true); }
+        }
 
         function openActionModal(from_email, to_email, subject, type) {
             let targetEmail = to_email;
             let message = "";
-            if (type === 'reply') { message = prompt(`Replying to: ${to_email}\nFrom: ${from_email}\n\nEnter your message:`); } 
-            else { targetEmail = prompt(`Forwarding from: ${from_email}\n\nEnter email to forward to:`); if (!targetEmail) return; message = prompt(`Enter message for forwarded email:`); }
+            if (type === 'reply') { 
+                message = prompt(`REPLYING TO PROSPECT:\nTo: ${to_email}\nFrom your Gmail: ${from_email}\n\nType your custom message below:`); 
+            } else { 
+                targetEmail = prompt(`FORWARDING THREAD FROM: ${from_email}\n\nEnter recipient email to forward this to:`); 
+                if (!targetEmail) return; 
+                message = prompt(`Enter custom body for forwarded email:`); 
+            }
+            
             if (message !== null && message.trim() !== "") {
-                fetch('/api/replies/send-action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from_email: from_email, to_email: targetEmail, subject: subject, body: message }) })
-                .then(res => res.json()).then(data => alert(data.message)).catch(err => alert("Error"));
+                fetch('/api/replies/send-action', { 
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify({ from_email, to_email: targetEmail, subject, body: message }) 
+                })
+                .then(res => res.json())
+                .then(data => showToast(data.message || "Action queued to local Python worker!"))
+                .catch(err => showToast("Failed to queue CRM action", true));
             }
         }
 
