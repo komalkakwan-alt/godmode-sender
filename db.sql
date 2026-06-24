@@ -1,10 +1,10 @@
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL
 );
 
-CREATE TABLE mailboxes (
+CREATE TABLE IF NOT EXISTS mailboxes (
     id SERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
     app_password VARCHAR(255) NOT NULL,
@@ -16,10 +16,14 @@ CREATE TABLE mailboxes (
     warmup_mode BOOLEAN DEFAULT false,
     warmup_enabled BOOLEAN DEFAULT true,
     warmup_sent_today INT DEFAULT 0,
-    warmup_daily_limit INT DEFAULT 5
+    warmup_daily_limit INT DEFAULT 5,
+    -- God-Mode SaaS Additions:
+    proxy_url VARCHAR(255),
+    send_mode VARCHAR(50) DEFAULT 'cloud_proxy',
+    inbox_auth_status VARCHAR(50) DEFAULT 'untested'
 );
 
-CREATE TABLE campaigns (
+CREATE TABLE IF NOT EXISTS campaigns (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     status VARCHAR(50) DEFAULT 'draft',
@@ -31,7 +35,7 @@ CREATE TABLE campaigns (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE leads (
+CREATE TABLE IF NOT EXISTS leads (
     id SERIAL PRIMARY KEY,
     campaign_id INT REFERENCES campaigns(id),
     recipient_email VARCHAR(255) NOT NULL,
@@ -40,10 +44,12 @@ CREATE TABLE leads (
     subject TEXT,
     body TEXT,
     status VARCHAR(50) DEFAULT 'pending',
+    bounced BOOLEAN DEFAULT false,
+    opt_out BOOLEAN DEFAULT false,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE replies (
+CREATE TABLE IF NOT EXISTS replies (
     id SERIAL PRIMARY KEY,
     from_email VARCHAR(255),
     to_email VARCHAR(255),
@@ -52,7 +58,7 @@ CREATE TABLE replies (
     received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE manual_actions (
+CREATE TABLE IF NOT EXISTS manual_actions (
     id SERIAL PRIMARY KEY,
     from_email VARCHAR(255),
     to_email VARCHAR(255),
@@ -61,7 +67,7 @@ CREATE TABLE manual_actions (
     status VARCHAR(50) DEFAULT 'pending'
 );
 
-CREATE TABLE warmup_threads (
+CREATE TABLE IF NOT EXISTS warmup_threads (
     id SERIAL PRIMARY KEY,
     sender_email VARCHAR(255),
     receiver_email VARCHAR(255),
