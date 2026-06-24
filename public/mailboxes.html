@@ -1,106 +1,253 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mailboxes - God-Mode Sender</title>
+    <title>God-Mode | Dispatch Hub</title>
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-900 text-gray-200 flex">
-    <div class="w-64 bg-black p-6 flex flex-col space-y-4 min-h-screen">
-        <h1 class="text-2xl font-bold text-white mb-8">God-Mode Sender</h1>
-        <a href="index.html" class="hover:text-blue-400 font-medium">📊 My Stats</a>
-        <a href="mailboxes.html" class="text-blue-400 font-medium">📬 Mailboxes</a>
-        <a href="/api/logout" class="hover:text-red-400 font-medium mt-auto">🚪 Logout</a>
-    </div>
-
-    <div class="flex-1 p-10 overflow-auto">
-        <h2 class="text-3xl font-bold mb-8">Mailboxes & Proxies</h2>
-
-        <div class="bg-gray-800 p-6 rounded-lg mb-10 shadow-lg max-w-xl">
-            <h3 class="text-xl font-bold mb-2">Upload Mailboxes CSV</h3>
-            <p class="text-gray-400 text-sm mb-4">Columns required: <b>email, app_password</b></p>
-            <form id="mbForm" enctype="multipart/form-data" class="flex space-x-4">
-                <input type="file" name="file" accept=".csv" class="p-2 bg-gray-700 rounded flex-1 text-sm" required>
-                <button type="submit" class="bg-purple-600 hover:bg-purple-700 px-5 py-2 rounded font-bold text-sm">Upload & Add</button>
-            </form>
-        </div>
-
-        <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
-            <table class="w-full text-left text-sm">
-                <thead class="bg-gray-700 text-gray-400 uppercase text-xs">
-                    <tr>
-                        <th class="p-4">Email</th>
-                        <th class="p-4">Status</th>
-                        <th class="p-4">Sent / Limit</th>
-                        <th class="p-4">Dispatch Mode</th>
-                        <th class="p-4">SOCKS5 Proxy URL</th>
-                        <th class="p-4">SMTP Auth</th>
-                    </tr>
-                </thead>
-                <tbody id="mbTable" class="divide-y divide-gray-700"></tbody>
-            </table>
-        </div>
-    </div>
-
+    <!-- FontAwesome CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script>
-        async function loadMailboxes() {
-            const res = await fetch('/api/mailboxes');
-            const data = await res.json();
-            const tbody = document.getElementById('mbTable');
-            tbody.innerHTML = '';
+        tailwind.config = { darkMode: 'class', theme: { extend: { colors: { slate: { 850: '#1e293b' } } } } }
+    </script>
+</head>
+<body class="bg-[#0b0f19] text-slate-100 font-sans min-h-screen flex selection:bg-purple-500 selection:text-white">
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-5 right-5 z-50 flex items-center gap-3 bg-slate-800 border border-slate-700 px-4 py-3 rounded-xl shadow-2xl transform translate-x-full opacity-0 transition-all duration-300">
+        <div id="toast-icon" class="w-8 h-8 rounded-lg flex items-center justify-center"></div>
+        <p id="toast-msg" class="text-sm font-medium text-white"></p>
+    </div>
+
+    <!-- SIDEBAR -->
+    <aside class="w-64 bg-[#111827] border-r border-slate-800 flex flex-col justify-between shrink-0">
+        <div>
+            <div class="h-20 flex items-center px-6 border-b border-slate-800">
+                <span class="text-xl font-black tracking-wider bg-gradient-to-r from-purple-400 via-indigo-300 to-white bg-clip-text text-transparent">
+                    GOD-MODE
+                </span>
+            </div>
+            <nav class="p-4 space-y-1">
+                <a href="/index.html" class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all">
+                    <i class="fa-solid fa-chart-line w-5"></i> Dashboard
+                </a>
+                <a href="/mailboxes.html" class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-white bg-purple-600/20 border border-purple-500/30 shadow-inner">
+                    <i class="fa-solid fa-inbox w-5 text-purple-400"></i> Dispatch Hub
+                </a>
+            </nav>
+        </div>
+        <div class="p-4 border-t border-slate-800">
+            <a href="/api/logout" class="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-rose-400 hover:bg-rose-500/10 transition-all">
+                <i class="fa-solid fa-right-from-bracket"></i> Logout
+            </a>
+        </div>
+    </aside>
+
+    <!-- MAIN WORKSPACE -->
+    <main class="flex-1 p-8 overflow-y-auto max-w-7xl mx-auto">
+        
+        <!-- TOP BAR: Title & NUKE Button -->
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 bg-slate-900/40 p-6 rounded-2xl border border-slate-800">
+            <div>
+                <h1 class="text-2xl font-bold text-white tracking-tight">Global Dispatch & Proxy Pool</h1>
+                <p class="text-xs text-slate-400 mt-1">Configure your email engine routing across all active Gmail accounts</p>
+            </div>
             
-            data.forEach(m => {
-                const isPC = m.send_mode === 'local_computer';
-                const statusColor = m.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400';
-                const authText = m.inbox_auth_status === 'verified' ? 'Auth Verified ✅' : (m.inbox_auth_status === 'failed' ? 'Auth Failed ❌' : 'Check Inbox Auth');
+            <button onclick="nukeCSVLeads()" class="bg-rose-500/10 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-lg flex items-center gap-2 group">
+                <i class="fa-solid fa-skull-crossbones text-rose-400 group-hover:text-white group-hover:rotate-12 transition-transform"></i>
+                <span>NUKE LOADED CSV LEADS</span>
+            </button>
+        </div>
 
-                tbody.innerHTML += `
-                <tr class="hover:bg-gray-700/50">
-                    <td class="p-4 font-medium text-white">${m.email}</td>
-                    <td class="p-4"><span class="px-2 py-1 rounded text-xs ${statusColor}">${m.status}</span></td>
-                    <td class="p-4">${m.sent_today} / ${m.daily_limit}</td>
-                    <td class="p-4">
-                        <select onchange="updateMode('${m.email}', this.value)" class="bg-gray-900 border border-gray-600 rounded p-1 text-xs text-yellow-400">
-                            <option value="cloud_proxy" ${!isPC ? 'selected':''}>☁️ Cloud Proxy</option>
-                            <option value="local_computer" ${isPC ? 'selected':''}>🖥️ My Computer</option>
-                        </select>
-                    </td>
-                    <td class="p-4">
-                        <input type="text" placeholder="socks5://user:pass@ip:port" value="${m.proxy_url || ''}" 
-                        onblur="updateProxy('${m.email}', this.value)" class="bg-gray-900 border border-gray-600 rounded p-1 text-xs w-48 text-gray-300">
-                    </td>
-                    <td class="p-4">
-                        <button onclick="verifyAuth('${m.email}')" class="bg-blue-600/30 hover:bg-blue-600 text-blue-300 px-3 py-1 rounded text-xs transition border border-blue-500/30">
-                            ${authText}
-                        </button>
-                    </td>
-                </tr>`;
-            });
+        <!-- SECTION 1: GLOBAL CONTROL PANEL (2-Col Grid) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            
+            <!-- CARD A: Local PC Engine -->
+            <div class="bg-[#161f33] border border-cyan-500/30 rounded-2xl p-6 relative overflow-hidden flex flex-col justify-between shadow-xl">
+                <div class="absolute -right-10 -bottom-10 w-40 h-40 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="px-3 py-1 bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-bold rounded-full flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span> LOCAL ENGINE
+                        </span>
+                        <i class="fa-solid fa-microchip text-cyan-400/40 text-2xl"></i>
+                    </div>
+                    <h2 class="text-lg font-bold text-white mb-1">My Computer (Zero-Proxy Mode)</h2>
+                    <p class="text-slate-400 text-xs leading-relaxed">
+                        Forces all Gmails to send via your local laptop's physical WiFi IP. Highest possible inbox trust score. Bypasses Google datacenter bans.
+                    </p>
+                </div>
+
+                <button onclick="applyGlobalLocalMode()" class="mt-6 w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs py-3 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 tracking-wider">
+                    <i class="fa-solid fa-bolt"></i> APPLY 'MY COMPUTER' TO ALL G-MAILS
+                </button>
+            </div>
+
+            <!-- CARD B: Proxy Pool Engine -->
+            <div class="bg-[#1c1833] border border-purple-500/30 rounded-2xl p-6 relative flex flex-col justify-between shadow-xl">
+                <div class="absolute -right-10 -bottom-10 w-40 h-40 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="px-3 py-1 bg-purple-500/10 border border-purple-500/20 text-purple-400 text-xs font-bold rounded-full flex items-center gap-1.5">
+                            <i class="fa-solid fa-network-wired"></i> PROXY POOL ROTATOR
+                        </span>
+                        <span class="text-xs font-mono text-purple-300/60">Auto-Randomizer</span>
+                    </div>
+                    <textarea id="proxyPoolBox" rows="3" class="w-full bg-slate-900/90 border border-purple-500/30 rounded-xl p-3 text-xs text-purple-200 font-mono focus:outline-none focus:border-purple-400 transition-colors resize-none placeholder-slate-600" placeholder="Paste Proxies here (One per line)&#10;socks5://user:pass@185.199.229.156:1080&#10;http://user:pass@104.28.19.44:8000"></textarea>
+                </div>
+
+                <button onclick="applyGlobalProxyPool()" class="mt-4 w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs py-3 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 tracking-wider">
+                    <i class="fa-solid fa-shuffle"></i> RANDOMIZE & DISTRIBUTE ACROSS ALL
+                </button>
+            </div>
+
+        </div>
+
+        <!-- SECTION 2: ADD G-MAILS CSV -->
+        <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 mb-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
+                    <i class="fa-solid fa-file-csv text-xl"></i>
+                </div>
+                <div>
+                    <h3 class="text-sm font-bold text-white">Add New Mailboxes (CSV)</h3>
+                    <p class="text-xs text-slate-400">Required headers: <code class="text-indigo-300 bg-slate-800 px-1.5 py-0.5 rounded">email</code>, <code class="text-indigo-300 bg-slate-800 px-1.5 py-0.5 rounded">app_password</code></p>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-3 w-full sm:w-auto">
+                <input type="file" id="csvFileInput" accept=".csv" class="block w-full sm:w-64 text-xs text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-indigo-400 hover:file:bg-slate-700 file:cursor-pointer transition-all">
+                <button onclick="uploadMailboxesCSV()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 shadow-md">
+                    Upload
+                </button>
+            </div>
+        </div>
+
+        <!-- SECTION 3: THE MASTER TABLE -->
+        <div class="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+            <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/90">
+                <h3 class="text-xs font-black tracking-wider text-slate-400 uppercase">Active Dispatch Roster</h3>
+                <span id="mailboxCount" class="text-xs font-bold text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-full border border-purple-500/20">0 Accounts Loaded</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="border-b border-slate-800 text-[10px] font-black uppercase text-slate-500 bg-slate-950/40">
+                            <th class="py-3 px-6">Gmail Address</th>
+                            <th class="py-3 px-6">Dispatch Routing</th>
+                            <th class="py-3 px-6">Assigned IP / Proxy</th>
+                            <th class="py-3 px-6 text-center">Daily Quota</th>
+                            <th class="py-3 px-6 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="mailboxesTbody" class="divide-y divide-slate-800/60 text-xs">
+                        <!-- JS injected rows -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        document.addEventListener("DOMContentLoaded", loadMailboxes);
+
+        function showToast(msg, isError = false) {
+            const t = document.getElementById('toast');
+            const icon = document.getElementById('toast-icon');
+            document.getElementById('toast-msg').innerText = msg;
+            
+            icon.className = `w-8 h-8 rounded-lg flex items-center justify-center ${isError ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'}`;
+            icon.innerHTML = isError ? '<i class="fa-solid fa-triangle-exclamation"></i>' : '<i class="fa-solid fa-check font-bold"></i>';
+            
+            t.classList.remove('translate-x-full', 'opacity-0');
+            setTimeout(() => t.classList.add('translate-x-full', 'opacity-0'), 3500);
         }
 
-        document.getElementById('mbForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const res = await fetch('/api/mailboxes/upload-csv', { method: 'POST', body: new FormData(e.target) });
-            const data = await res.json();
-            alert(data.message);
-            loadMailboxes();
-        });
+        async function loadMailboxes() {
+            try {
+                const res = await fetch('/api/mailboxes'); const data = await res.json();
+                document.getElementById('mailboxCount').innerText = `${data.length} Accounts Loaded`;
+                
+                const tbody = document.getElementById('mailboxesTbody');
+                tbody.innerHTML = data.map(m => `
+                    <tr class="hover:bg-slate-800/30 transition-colors">
+                        <td class="py-4 px-6 font-medium text-white flex items-center gap-2.5">
+                            <span class="w-2 h-2 rounded-full ${m.status === 'active' ? 'bg-emerald-400 shadow-lg shadow-emerald-500' : 'bg-amber-400'}"></span>
+                            ${m.email}
+                        </td>
+                        <td class="py-4 px-6">
+                            <span class="px-2.5 py-1 rounded-md text-[11px] font-bold ${m.dispatch_mode === 'local' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'}">
+                                ${m.dispatch_mode === 'local' ? '🖥️ Local Engine' : '☁️ Cloud Proxy'}
+                            </span>
+                        </td>
+                        <td class="py-4 px-6 font-mono text-[11px] text-slate-400 max-w-xs truncate">
+                            ${m.proxy_url ? `<span class="text-purple-300">${m.proxy_url}</span>` : '<span class="text-slate-600 italic">Direct Laptop IP (None)</span>'}
+                        </td>
+                        <td class="py-4 px-6 text-center font-mono font-semibold text-slate-300">
+                            ${m.sent_today} <span class="text-slate-600">/</span> ${m.daily_limit}
+                        </td>
+                        <td class="py-4 px-6 text-right">
+                            <button onclick="deleteMailbox(${m.id})" class="text-slate-500 hover:text-rose-400 p-2 rounded-lg hover:bg-rose-500/10 transition-all title="Delete Mailbox">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch(e) { console.log(e); }
+        }
 
-        async function updateMode(email, mode) {
-            await fetch('/api/mailboxes/update-mode', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ email, send_mode: mode }) });
-        }
-        async function updateProxy(email, proxy) {
-            await fetch('/api/mailboxes/update-mode', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ email, proxy_url: proxy }) });
-        }
-        async function verifyAuth(email) {
-            const res = await fetch('/api/mailboxes/verify-auth', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ email }) });
-            const data = await res.json();
-            alert(data.message || data.error);
-            loadMailboxes();
+        // 1. APPLY LOCAL TO ALL
+        async function applyGlobalLocalMode() {
+            try {
+                const r = await fetch('/api/mailboxes/bulk-mode-local', { method: 'POST' });
+                const res = await r.json();
+                showToast(res.message); loadMailboxes();
+            } catch(e) { showToast("Error applying local mode", true); }
         }
 
-        loadMailboxes();
+        // 2. APPLY PROXIES TO ALL
+        async function applyGlobalProxyPool() {
+            const raw = document.getElementById('proxyPoolBox').value;
+            const proxies = raw.split('\n').map(p => p.trim()).filter(p => p.length > 5);
+            
+            if(proxies.length === 0) return showToast("Please paste at least 1 valid proxy URL!", true);
+
+            try {
+                const r = await fetch('/api/mailboxes/bulk-distribute-proxies', {
+                    method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ proxies })
+                });
+                const res = await r.json();
+                if(res.error) return showToast(res.error, true);
+                showToast(res.message); document.getElementById('proxyPoolBox').value = ''; loadMailboxes();
+            } catch(e) { showToast("Failed to distribute proxies", true); }
+        }
+
+        // 3. NUKE CSV LEADS
+        async function nukeCSVLeads() {
+            if(!confirm("⚠️ DANGER: This will instantly wipe all uploaded Campaign leads from the database. Are you sure?")) return;
+            try {
+                const r = await fetch('/api/campaigns/nuke-leads', { method: 'DELETE' });
+                const res = await r.json(); showToast(res.message);
+            } catch(e) { showToast("Failed to Nuke leads", true); }
+        }
+
+        // 4. DELETE SINGLE MAILBOX
+        async function deleteMailbox(id) {
+            if(!confirm("Delete this Gmail account from sender engine?")) return;
+            await fetch(`/api/mailboxes/${id}`, { method: 'DELETE' });
+            showToast("Mailbox removed!"); loadMailboxes();
+        }
+
+        async function uploadMailboxesCSV() {
+            const file = document.getElementById('csvFileInput').files[0];
+            if(!file) return showToast("Select a file first!", true);
+            const fd = new FormData(); fd.append('file', file);
+            await fetch('/api/mailboxes/upload-csv', { method: 'POST', body: fd });
+            showToast("Mailboxes imported successfully!"); loadMailboxes();
+        }
     </script>
 </body>
 </html>
