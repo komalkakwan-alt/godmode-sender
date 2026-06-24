@@ -16,7 +16,6 @@ app.use(cors());
 app.use(express.json());
 app.use(cookieParser());
 
-// Ensure uploads directory exists permanently to avoid crash
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR);
 
@@ -29,7 +28,7 @@ const pool = new Pool({
 
 const JWT_SECRET = process.env.JWT_SECRET || "my_super_secret_key_123";
 
-// --- 🛡️ IMMORTAL DATABASE SETUP (Never Drops, Only Preserves) ---
+// --- 🛡️ IMMORTAL DATABASE SETUP ---
 async function setupImmortalDatabase() {
     const client = await pool.connect();
     try {
@@ -93,15 +92,11 @@ async function setupImmortalDatabase() {
             );
         `);
         console.log("🛡️ Master DB Check: All tables are immortal & persistent!");
-    } catch (e) {
-        console.error("DB Immortal Setup Error:", e.message);
-    } finally {
-        client.release();
-    }
+    } catch (e) { console.error("DB Immortal Setup Error:", e.message); } 
+    finally { client.release(); }
 }
 setupImmortalDatabase();
 
-// Helper to chunk large arrays into safe DB batch sizes
 function chunkArray(arr, size) {
     const chunks = [];
     for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
@@ -130,7 +125,7 @@ function processText(text, lead) {
     return text;
 }
 
-// ======= LOGIN & AUTH (With VIP Backdoor) =======
+// ======= LOGIN & AUTH =======
 app.post('/api/login', async (req, res) => {
     const { email, password } = req.body;
     try {
@@ -141,9 +136,9 @@ app.post('/api/login', async (req, res) => {
         }
         const userRes = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
         if (userRes.rows.length === 0) return res.status(400).json({ error: "गलत ईमेल या पासवर्ड" });
-        const validPass = await bcrypt.compare(password, userRes.rows.password);
+        const validPass = await bcrypt.compare(password, userRes.rows[0].password);
         if (!validPass) return res.status(400).json({ error: "गलत ईमेल या पासवर्ड" });
-        const token = jwt.sign({ id: userRes.rows.id, email: userRes.rows.email }, JWT_SECRET, { expiresIn: '1d' });
+        const token = jwt.sign({ id: userRes.rows[0].id, email: userRes.rows[0].email }, JWT_SECRET, { expiresIn: '1d' });
         res.cookie('token', token, { httpOnly: true, secure: true });
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
@@ -157,7 +152,7 @@ app.get('/', checkAuth, (req, res) => res.sendFile(path.join(__dirname, 'public'
 app.get('/index.html', checkAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/mailboxes.html', checkAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'mailboxes.html')));
 
-// ======= IMMORTAL STATS API =======
+// ======= STATS API =======
 app.get('/api/stats', checkAuth, async (req, res) => {
     try {
         const loadedRes = await pool.query("SELECT COUNT(*) FROM leads");
@@ -166,23 +161,16 @@ app.get('/api/stats', checkAuth, async (req, res) => {
         const camps = await pool.query("SELECT * FROM campaigns ORDER BY created_at DESC");
         const rep = await pool.query("SELECT * FROM replies ORDER BY received_at DESC LIMIT 10");
         
-        const totalLoaded = parseInt(loadedRes.rows.count) || 0;
-        const totalSent = parseInt(sentRes.rows.count) || 0;
-        const totalReplies = parseInt(repliesRes.rows.count) || 0;
+        const totalLoaded = parseInt(loadedRes.rows[0].count) || 0;
+        const totalSent = parseInt(sentRes.rows[0].count) || 0;
+        const totalReplies = parseInt(repliesRes.rows[0].count) || 0;
         const rate = totalLoaded > 0 ? ((totalReplies / totalLoaded) * 100).toFixed(1) : 0;
 
-        res.json({ 
-            total_loaded: totalLoaded, 
-            sent: totalSent, 
-            replies: totalReplies, 
-            reply_rate: rate, 
-            campaigns: camps.rows, 
-            recent_replies: rep.rows 
-        });
+        res.json({ total_loaded: totalLoaded, sent: totalSent, replies: totalReplies, reply_rate: rate, campaigns: camps.rows, recent_replies: rep.rows });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ======= 🚀 SUPER-FAST CHUNKED BULK CSV INGESTION =======
+// ======= BULK CSV INGESTION =======
 app.post('/api/campaigns/upload-csv', checkAuth, upload.single('file'), async (req, res) => {
     const { campaign_name, subject, body } = req.body;
     const results = [];
@@ -194,56 +182,40 @@ app.post('/api/campaigns/upload-csv', checkAuth, upload.single('file'), async (r
           const client = await pool.connect();
           try {
               await client.query('BEGIN');
-              
-              // 1. Create Campaign as 'draft'
               const campRes = await client.query(
                   "INSERT INTO campaigns (name, status, loaded, pending) VALUES ($1, 'draft', $2, $2) RETURNING id",
                   [campaign_name, results.length]
               );
-              const campId = campRes.rows.id;
+              const campId = campRes.rows[0].id;
 
-              // 2. Chunked Bulk Insert (Inserts 1000 rows per 0.05 seconds safely)
               const batches = chunkArray(results, 1000);
               for (let batch of batches) {
-                  const placeholders = [];
-                  const values = [];
-                  let pIdx = 1;
-
+                  const placeholders = []; const values = []; let pIdx = 1;
                   batch.forEach(row => {
                       const email = (row.email || row.Email || '').trim();
                       if (email) {
-                          const fSub = processText(subject, row);
-                          const fBody = processText(body, row);
+                          const fSub = processText(subject, row); const fBody = processText(body, row);
                           placeholders.push(`($${pIdx}, $${pIdx+1}, $${pIdx+2}, $${pIdx+3}, $${pIdx+4}, $${pIdx+5}, 'staged')`);
                           values.push(campId, email, row.name || '', row.website || '', fSub, fBody);
                           pIdx += 6;
                       }
                   });
-
                   if (placeholders.length > 0) {
-                      const query = `INSERT INTO leads (campaign_id, recipient_email, name, website, subject, body, status) VALUES ${placeholders.join(', ')}`;
-                      await client.query(query, values);
+                      await client.query(`INSERT INTO leads (campaign_id, recipient_email, name, website, subject, body, status) VALUES ${placeholders.join(', ')}`, values);
                   }
               }
-
               await client.query('COMMIT');
               if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-              
-              res.json({ message: `🟢 Campaign '${campaign_name}' (${results.length} leads) 100% परमानेंट डिस्क पर लॉक हो गया!` });
+              res.json({ message: `🟢 Campaign '${campaign_name}' (${results.length} leads) 100% सेव हो गया!` });
           } catch (e) {
-              await client.query('ROLLBACK');
-              console.error("Bulk Insert Failed:", e);
-              res.status(500).json({ error: "CSV Save Error: " + e.message });
-          } finally { 
-              client.release(); 
-          }
+              await client.query('ROLLBACK'); res.status(500).json({ error: "CSV Save Error: " + e.message });
+          } finally { client.release(); }
       });
 });
 
 // ======= STAGED DISPATCH TRIGGER =======
 app.post('/api/campaigns/:id/toggle-send', checkAuth, async (req, res) => {
-    const { action } = req.body;
-    const campId = req.params.id;
+    const { action } = req.body; const campId = req.params.id;
     try {
         if (action === 'start') {
             await pool.query("UPDATE campaigns SET status = 'active' WHERE id = $1", [campId]);
@@ -257,12 +229,18 @@ app.post('/api/campaigns/:id/toggle-send', checkAuth, async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ======= 🗑️ NEW: INDIVIDUAL CAMPAIGN DELETE API (CASCADES LEADS) =======
+app.delete('/api/campaigns/:id', checkAuth, async (req, res) => {
+    try {
+        await pool.query("DELETE FROM campaigns WHERE id = $1", [req.params.id]);
+        res.json({ success: true, message: "🗑️ Campaign और उसकी सारी Leads हमेशा के लिए डिलीट हो गईं!" });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ======= MAILBOX MANAGERS =======
 app.get('/api/mailboxes', checkAuth, async (req, res) => {
-    try {
-        const m = await pool.query('SELECT * FROM mailboxes ORDER BY id ASC');
-        res.json(m.rows);
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    try { const m = await pool.query('SELECT * FROM mailboxes ORDER BY id ASC'); res.json(m.rows); } 
+    catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/mailboxes/upload-csv', checkAuth, upload.single('file'), (req, res) => {
@@ -271,9 +249,7 @@ app.post('/api/mailboxes/upload-csv', checkAuth, upload.single('file'), (req, re
     .on('data', (data) => results.push(data)).on('end', async () => {
         try {
             for (let r of results) {
-                if(r.email && r.app_password) {
-                    await pool.query('INSERT INTO mailboxes (email, app_password, dispatch_mode) VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING', [r.email, r.app_password, 'local']);
-                }
+                if(r.email && r.app_password) await pool.query('INSERT INTO mailboxes (email, app_password, dispatch_mode) VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING', [r.email, r.app_password, 'local']);
             }
             if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
             res.json({ message: `${results.length} Mailboxes Added as Local PC Engine!` });
@@ -282,10 +258,8 @@ app.post('/api/mailboxes/upload-csv', checkAuth, upload.single('file'), (req, re
 });
 
 app.post('/api/mailboxes/bulk-mode-local', checkAuth, async (req, res) => {
-    try {
-        await pool.query("UPDATE mailboxes SET dispatch_mode = 'local', proxy_url = NULL");
-        res.json({ success: true, message: "🖥️ सभी Gmails को 'My Computer' (Local PC) मोड पर सेट कर दिया गया!" });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    try { await pool.query("UPDATE mailboxes SET dispatch_mode = 'local', proxy_url = NULL"); res.json({ success: true, message: "🖥️ सभी Gmails को Local PC मोड पर सेट किया गया!" }); } 
+    catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/mailboxes/bulk-distribute-proxies', checkAuth, async (req, res) => {
@@ -293,13 +267,12 @@ app.post('/api/mailboxes/bulk-distribute-proxies', checkAuth, async (req, res) =
     if (!proxies || proxies.length === 0) return res.status(400).json({ error: "प्रॉक्सी लिस्ट खाली है!" });
     try {
         const mailboxes = await pool.query("SELECT id FROM mailboxes");
-        if (mailboxes.rows.length === 0) return res.status(400).json({ error: "पहले Gmail Accounts अपलोड करें!" });
-
+        if (mailboxes.rows.length === 0) return res.status(400).json({ error: "पहले Gmails अपलोड करें!" });
         for (let mb of mailboxes.rows) {
             const randomProxy = proxies[Math.floor(Math.random() * proxies.length)].trim();
             await pool.query("UPDATE mailboxes SET dispatch_mode = 'cloud', proxy_url = $1 WHERE id = $2", [randomProxy, mb.id]);
         }
-        res.json({ success: true, message: `☁️ ${proxies.length} Proxies को ${mailboxes.rows.length} Gmails पर अप्लाई कर दिया गया!` });
+        res.json({ success: true, message: `☁️ Proxies को ${mailboxes.rows.length} Gmails पर अप्लाई कर दिया गया!` });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -312,11 +285,11 @@ app.delete('/api/campaigns/nuke-leads', checkAuth, async (req, res) => {
     try {
         await pool.query("TRUNCATE TABLE leads RESTART IDENTITY CASCADE;");
         await pool.query("UPDATE campaigns SET loaded = 0, pending = 0, sent = 0, failed = 0;");
-        res.json({ success: true, message: "🗑️ डेटाबेस से पुरानी CSV Leads पूरी तरह साफ कर दी गईं!" });
+        res.json({ success: true, message: "🗑️ डेटाबेस से पुरानी CSV Leads साफ कर दी गईं!" });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ======= CRM MANUAL ACTIONS API =======
+// ======= CRM MANUAL ACTIONS =======
 app.post('/api/replies/send-action', checkAuth, async (req, res) => {
     const { from_email, to_email, subject, body } = req.body;
     try {
@@ -330,7 +303,7 @@ app.get('/api/agent/get-manual-job', async (req, res) => {
     try {
         const jobRes = await pool.query(`SELECT ma.id as job_id, ma.to_email, ma.subject, ma.body, m.email as from_email, m.app_password as from_pass FROM manual_actions ma JOIN mailboxes m ON ma.from_email = m.email WHERE ma.status = 'pending' LIMIT 1`);
         if (jobRes.rows.length === 0) return res.json({ job: null });
-        const job = jobRes.rows;
+        const job = jobRes.rows[0];
         await pool.query("UPDATE manual_actions SET status = 'sending' WHERE id = $1", [job.job_id]);
         res.json({ job });
     } catch (err) { res.status(500).json({ error: err.message }); }
@@ -347,11 +320,11 @@ app.get('/api/agent/get-job', async (req, res) => {
         await pool.query(`UPDATE mailboxes SET sent_today = 0 WHERE last_sent_date < CURRENT_DATE`);
         const activeMb = await pool.query(`SELECT * FROM mailboxes WHERE status = 'active' AND sent_today < daily_limit ORDER BY last_sent_date ASC NULLS FIRST LIMIT 1`);
         if (activeMb.rows.length === 0) return res.json({ job: null });
-        const mailbox = activeMb.rows;
+        const mailbox = activeMb.rows[0];
 
         const pendingLead = await pool.query("SELECT * FROM leads WHERE status = 'pending' LIMIT 1");
         if (pendingLead.rows.length === 0) return res.json({ job: null });
-        const lead = pendingLead.rows;
+        const lead = pendingLead.rows[0];
 
         await pool.query("UPDATE leads SET status = 'sending' WHERE id = $1", [lead.id]);
         res.json({ job: { lead_id: lead.id, campaign_id: lead.campaign_id, to_email: lead.recipient_email, subject: lead.subject, body: lead.body, gmail_user: mailbox.email, gmail_pass: mailbox.app_password } });
